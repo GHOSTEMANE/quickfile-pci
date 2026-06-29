@@ -7,7 +7,7 @@ const SCOPES = ["Mail.ReadWrite", "User.Read"];
 let msalInstance;
 
 Office.onReady((info) => {
-  applyOfficeTheme();
+  applyTheme();
   const statusEl = document.getElementById("status");
   if (info.host !== Office.HostType.Outlook) {
     statusEl.textContent = "Este add-in destina-se ao Outlook.";
@@ -17,16 +17,53 @@ Office.onReady((info) => {
   document.getElementById("btnPastas").addEventListener("click", verPastas);
 });
 
-/** Alinha as cores do painel com o tema atual do Outlook (claro/escuro). */
-function applyOfficeTheme() {
+/** Decide claro/escuro de forma robusta e FORCA um par de cores com contraste garantido.
+ *  (Nao confia no bodyForegroundColor do Outlook, que vem trocado no modo escuro do Mac.) */
+function applyTheme() {
+  let dark = true; // o default do CSS ja e escuro
   try {
-    const t = Office.context && Office.context.officeTheme;
-    if (!t) return;
-    const s = document.documentElement.style;
-    if (t.bodyBackgroundColor) s.setProperty("--bg", t.bodyBackgroundColor);
-    if (t.bodyForegroundColor) s.setProperty("--fg", t.bodyForegroundColor);
-    if (t.controlBackgroundColor) s.setProperty("--panel", t.controlBackgroundColor);
-  } catch (e) { /* mantem o tema do CSS */ }
+    const bg = Office.context && Office.context.officeTheme && Office.context.officeTheme.bodyBackgroundColor;
+    if (bg) dark = isDarkColor(bg);
+  } catch (e) { /* usa fallback abaixo */ }
+  try {
+    if (window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches) {
+      // se o sistema diz explicitamente claro e o Office nao contrariou, respeita
+      if (!(Office.context && Office.context.officeTheme && Office.context.officeTheme.bodyBackgroundColor)) {
+        dark = false;
+      }
+    }
+  } catch (e) { /* ignora */ }
+
+  const s = document.documentElement.style;
+  if (dark) {
+    s.setProperty("--bg", "#1f1f1f");
+    s.setProperty("--fg", "#ffffff");
+    s.setProperty("--muted", "#c8c8c8");
+    s.setProperty("--panel", "#383838");
+    s.setProperty("--azul", "#2b88d8");
+  } else {
+    s.setProperty("--bg", "#ffffff");
+    s.setProperty("--fg", "#202020");
+    s.setProperty("--muted", "#666666");
+    s.setProperty("--panel", "#f3f6fb");
+    s.setProperty("--azul", "#0f6cbd");
+  }
+}
+
+function isDarkColor(c) {
+  c = String(c).trim();
+  let r, g, b;
+  if (c[0] === "#") {
+    let h = c.slice(1);
+    if (h.length === 3) h = h.split("").map((x) => x + x).join("");
+    r = parseInt(h.slice(0, 2), 16); g = parseInt(h.slice(2, 4), 16); b = parseInt(h.slice(4, 6), 16);
+  } else {
+    const m = c.match(/\d+/g);
+    if (!m || m.length < 3) return true;
+    r = +m[0]; g = +m[1]; b = +m[2];
+  }
+  if ([r, g, b].some((v) => isNaN(v))) return true;
+  return (0.299 * r + 0.587 * g + 0.114 * b) < 140;
 }
 
 async function initMsal() {

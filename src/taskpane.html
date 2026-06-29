@@ -3,20 +3,14 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
   <title>Arquivar</title>
   <script src="https://appsforoffice.microsoft.com/lib/1.1/hosted/office.js"></script>
   <script src="vendor/msal-browser.min.js"></script>
   <style>
-    :root {
-      --azul:#0f6cbd;
-      --bg:#ffffff;
-      --fg:#242424;
-      --muted:#6b6b6b;
-      --panel:#f3f6fb;
-    }
-    @media (prefers-color-scheme: dark) {
-      :root { --bg:#1f1f1f; --fg:#f3f3f3; --muted:#b8b8b8; --panel:#2b2b2b; }
-    }
+    :root { --azul:#2b88d8; --bg:#1f1f1f; --fg:#ffffff; --muted:#c8c8c8; --panel:#333333; }
     * { box-sizing:border-box; }
     body { font-family:-apple-system,"Segoe UI",Roboto,sans-serif; margin:0; padding:16px;
            color:var(--fg); background:var(--bg); }
@@ -31,10 +25,10 @@
     #content { font-size:13px; line-height:1.5; margin-top:12px; color:var(--fg); }
     #content.muted { color:var(--muted); }
     #content ul { margin:0; padding:0; list-style:none; }
-    #content li { padding:7px 10px; border-radius:6px; display:flex; justify-content:space-between; gap:10px; }
+    #content li { padding:7px 10px; border-radius:6px; display:flex; justify-content:space-between; gap:10px; color:var(--fg); }
     #content li:nth-child(odd) { background:var(--panel); }
     #content li .cnt { color:var(--muted); font-variant-numeric:tabular-nums; }
-    .err { color:#e25563; white-space:pre-wrap; word-break:break-word; }
+    .err { color:#ff8a8a; white-space:pre-wrap; word-break:break-word; }
   </style>
 </head>
 <body>
