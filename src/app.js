@@ -24,7 +24,8 @@ Office.onReady((info) => {
   $("busca").addEventListener("focus", () => refreshPastas().catch(() => {})); // sincroniza ao ir procurar
   $("btnLogin").addEventListener("click", () => bootstrap(true));
   try { Office.context.mailbox.addHandlerAsync(Office.EventType.ItemChanged, atualizarSeMudou); } catch (e) {}
-  setInterval(atualizarSeMudou, 700);                                  // segue a troca de email
+  try { Office.context.mailbox.addHandlerAsync(Office.EventType.SelectedItemsChanged, atualizarSeMudou); } catch (e) {}
+  setInterval(atualizarSeMudou, 400);                                  // verificacao continua (fallback robusto)
   setInterval(() => refreshPastas().catch(() => {}), 20000);          // apanha pastas apagadas/criadas/renomeadas
   document.addEventListener("visibilitychange", () => { if (!document.hidden) refreshPastas().catch(() => {}); });
 
@@ -52,7 +53,8 @@ function renderEmail() {
   }
 }
 function atualizarSeMudou() {
-  const item = Office.context.mailbox.item;
+  let item = null;
+  try { item = Office.context.mailbox.item; } catch (e) {}
   const id = item ? item.itemId : null;
   if (id !== emailAtual.itemId) { renderEmail(); calcularSugestao(); }
 }
