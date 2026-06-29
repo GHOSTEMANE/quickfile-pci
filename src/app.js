@@ -1,4 +1,4 @@
-/* Arquivar — arquivar + sugestao + criar/sincronizar pastas. Rapido (cache pastas, sessao). */
+/* Arquivar — deteccao robusta do email selecionado (getSelectedItemsAsync) + arquivar + sugestao. */
 
 const CLIENT_ID = "b23c4cee-bc85-4b4c-ad0a-a4422b028cda";
 const AUTHORITY = "https://login.microsoftonline.com/6b1e5ee4-5f29-4a83-9c85-ac56ea7118d2";
@@ -11,7 +11,7 @@ const SISTEMA = ["caixa de entrada","inbox","rascunhos","drafts","itens enviados
 
 let msalInstance, cachedToken = null;
 let pastas = [], pastasById = {};
-let emailAtual = { remetente: "", itemId: null };
+let emailAtual = { itemId: null, subject: "", remetente: "", remetenteNome: "" };
 let uso = JSON.parse(localStorage.getItem(LS_USO) || "{}");
 
 const $ = (id) => document.getElementById(id);
@@ -21,42 +21,77 @@ const ehSistema = (n) => SISTEMA.includes((n || "").toLowerCase());
 Office.onReady((info) => {
   if (info.host !== Office.HostType.Outlook) { status("Este add-in destina-se ao Outlook."); return; }
   $("busca").addEventListener("input", renderLista);
-  $("busca").addEventListener("focus", () => refreshPastas().catch(() => {})); // sincroniza ao ir procurar
+  $("busca").addEventListener("focus", () => refreshPastas().catch(() => {}));
   $("btnLogin").addEventListener("click", () => bootstrap(true));
-  try { Office.context.mailbox.addHandlerAsync(Office.EventType.ItemChanged, atualizarSeMudou); } catch (e) {}
-  try { Office.context.mailbox.addHandlerAsync(Office.EventType.SelectedItemsChanged, atualizarSeMudou); } catch (e) {}
-  setInterval(atualizarSeMudou, 400);                                  // verificacao continua (fallback robusto)
-  setInterval(() => refreshPastas().catch(() => {}), 20000);          // apanha pastas apagadas/criadas/renomeadas
-  document.addEventListener("visibilitychange", () => { if (!document.hidden) refreshPastas().catch(() => {}); });
+  try { Office.context.mailbox.addHandlerAsync(Office.EventType.ItemChanged, detetarSelecao); } catch (e) {}
+  try { Office.context.mailbox.addHandlerAsync(Office.EventType.SelectedItemsChanged, detetarSelecao); } catch (e) {}
+  setInterval(detetarSelecao, 400);                          // segue a troca de email (robusto)
+  setInterval(() => refreshPastas().catch(() => {}), 20000);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) { refreshPastas().catch(() => {}); detetarSelecao(); } });
 
-  renderEmail();
+  detetarSelecao();
   const cache = JSON.parse(localStorage.getItem(LS_PASTAS) || "null");
-  if (cache && cache.length) { setPastas(cache); mostrarUI(); calcularSugestao(); }
+  if (cache && cache.length) { setPastas(cache); mostrarUI(); }
   bootstrap(false);
 });
 
-/* ---------- email selecionado ---------- */
-function renderEmail() {
-  const item = Office.context.mailbox.item;
-  const el = $("email");
-  if (item && item.subject) {
-    const rem = (item.from && item.from.emailAddress) || "";
-    const nome = (item.from && item.from.displayName) || rem;
-    emailAtual = { remetente: rem.toLowerCase(), itemId: item.itemId };
-    el.className = "card"; el.innerHTML = "";
-    const a = document.createElement("div"); a.className = "assunto"; a.textContent = item.subject;
-    const d = document.createElement("div"); d.className = "de"; d.textContent = nome ? ("de " + nome) : "";
-    el.appendChild(a); el.appendChild(d);
+/* ---------- deteccao do email selecionado (fonte de verdade: getSelectedItemsAsync) ---------- */
+function detetarSelecao() {
+  const mbx = Office.context.mailbox;
+  if (mbx && typeof mbx.getSelectedItemsAsync === "function") {
+    mbx.getSelectedItemsAsync((res) => {
+      if (!res || res.status !== Office.AsyncResultStatus.Succeeded) { return detetarPorItem(); }
+      const arr = res.value || [];
+      if (!arr.length) { definirEmail(null); return; }
+      const sel = arr[0];
+      if (sel.itemId !== emailAtual.itemId) definirEmail({ itemId: sel.itemId, subject: sel.subject || "(sem assunto)" });
+    });
   } else {
-    emailAtual = { remetente: "", itemId: null };
-    el.className = "card vazio"; el.textContent = "Seleciona um email na lista.";
+    detetarPorItem();
   }
 }
-function atualizarSeMudou() {
-  let item = null;
-  try { item = Office.context.mailbox.item; } catch (e) {}
+function detetarPorItem() {
+  let item = null; try { item = Office.context.mailbox.item; } catch (e) {}
   const id = item ? item.itemId : null;
-  if (id !== emailAtual.itemId) { renderEmail(); calcularSugestao(); }
+  if (id !== emailAtual.itemId) {
+    definirEmail(item ? {
+      itemId: id, subject: item.subject || "(sem assunto)",
+      remetente: item.from ? (item.from.emailAddress || "").toLowerCase() : "",
+      remetenteNome: item.from ? (item.from.displayName || item.from.emailAddress || "") : "",
+    } : null);
+  }
+}
+function definirEmail(dados) {
+  if (!dados) { emailAtual = { itemId: null, subject: "", remetente: "", remetenteNome: "" }; renderEmail(); $("sugWrap").classList.add("hidden"); return; }
+  emailAtual = { itemId: dados.itemId, subject: dados.subject || "", remetente: dados.remetente || "", remetenteNome: dados.remetenteNome || "" };
+  renderEmail();
+  if (emailAtual.remetente) calcularSugestao();
+  else { $("sugWrap").classList.add("hidden"); obterRemetente(emailAtual.itemId); }
+}
+async function obterRemetente(itemId) {
+  // getSelectedItemsAsync nao traz o remetente -> busca-o (para a sugestao)
+  try {
+    const restId = Office.context.mailbox.convertToRestId(itemId, Office.MailboxEnums.RestVersion.v2_0);
+    const r = await graphFetch("https://graph.microsoft.com/v1.0/me/messages/" + restId + "?$select=from");
+    if (!r.ok) return;
+    const m = await r.json();
+    const addr = (m.from && m.from.emailAddress && m.from.emailAddress.address) || "";
+    const nome = (m.from && m.from.emailAddress && m.from.emailAddress.name) || addr;
+    if (itemId === emailAtual.itemId) {
+      emailAtual.remetente = addr.toLowerCase(); emailAtual.remetenteNome = nome;
+      renderEmail(); calcularSugestao();
+    }
+  } catch (e) {}
+}
+
+function renderEmail() {
+  const el = $("email");
+  if (emailAtual.itemId && emailAtual.subject) {
+    el.className = "card"; el.innerHTML = "";
+    const a = document.createElement("div"); a.className = "assunto"; a.textContent = emailAtual.subject;
+    const d = document.createElement("div"); d.className = "de"; d.textContent = emailAtual.remetenteNome ? ("de " + emailAtual.remetenteNome) : "";
+    el.appendChild(a); el.appendChild(d);
+  } else { el.className = "card vazio"; el.textContent = "Seleciona um email na lista."; }
 }
 
 /* ---------- auth ---------- */
@@ -88,45 +123,34 @@ async function bootstrap(interactive) {
     await ensureToken(interactive);
     await refreshPastas();
     mostrarUI();
-    calcularSugestao();
+    if (emailAtual.remetente) calcularSugestao();
     $("btnLogin").classList.add("hidden");
-  } catch (e) {
-    if (!pastas.length) status("Liga a tua conta para começar.");
-    $("btnLogin").classList.remove("hidden");
-  }
+  } catch (e) { if (!pastas.length) status("Liga a tua conta para começar."); $("btnLogin").classList.remove("hidden"); }
 }
 async function refreshPastas() {
-  const url = "https://graph.microsoft.com/v1.0/me/mailFolders?$top=200&$select=id,displayName,totalItemCount";
-  const r = await graphFetch(url);
+  const r = await graphFetch("https://graph.microsoft.com/v1.0/me/mailFolders?$top=200&$select=id,displayName,totalItemCount");
   if (!r.ok) return;
   const data = await r.json();
   const lista = (data.value || []).sort((a, b) => (a.displayName || "").localeCompare(b.displayName || "", "pt"));
   setPastas(lista);
   localStorage.setItem(LS_PASTAS, JSON.stringify(lista));
 }
-function setPastas(lista) {
-  pastas = lista; pastasById = {};
-  lista.forEach((p) => { pastasById[p.id] = p; });
-  renderLista();
-}
+function setPastas(lista) { pastas = lista; pastasById = {}; lista.forEach((p) => { pastasById[p.id] = p; }); renderLista(); }
 function mostrarUI() { $("busca").classList.remove("hidden"); }
 
-/* ---------- render lista (com opcao de criar) ---------- */
+/* ---------- lista (com criar) ---------- */
 function renderLista() {
-  const q = $("busca").value.trim();
-  const ql = q.toLowerCase();
+  const q = $("busca").value.trim(); const ql = q.toLowerCase();
   const ul = $("lista"); ul.innerHTML = "";
   pastas.filter((p) => !ql || (p.displayName || "").toLowerCase().includes(ql)).forEach((p) => ul.appendChild(itemPasta(p)));
   if (q && !pastas.some((p) => (p.displayName || "").toLowerCase() === ql)) ul.appendChild(itemCriar(q));
 }
 function itemPasta(p, sugerida) {
-  const li = document.createElement("li");
-  if (sugerida) li.className = "sug";
+  const li = document.createElement("li"); if (sugerida) li.className = "sug";
   const nome = document.createElement("span"); nome.className = "nome"; nome.textContent = p.displayName || "(sem nome)";
   const cnt = document.createElement("span"); cnt.className = "cnt";
   cnt.textContent = typeof p.totalItemCount === "number" ? String(p.totalItemCount) : "";
-  const copy = document.createElement("span"); copy.className = "copy"; copy.title = "Copiar nome da pasta";
-  copy.textContent = "⧉";
+  const copy = document.createElement("span"); copy.className = "copy"; copy.title = "Copiar nome da pasta"; copy.textContent = "⧉";
   copy.addEventListener("click", (e) => { e.stopPropagation(); copiar(p.displayName); });
   li.appendChild(nome); li.appendChild(cnt); li.appendChild(copy);
   li.addEventListener("click", () => arquivar(p.id, p.displayName));
@@ -134,21 +158,19 @@ function itemPasta(p, sugerida) {
 }
 function copiar(texto) {
   const ok = () => status('✅ Copiado: ' + texto, "ok");
-  if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(texto).then(ok).catch(() => fallbackCopy(texto, ok));
-  } else { fallbackCopy(texto, ok); }
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(texto).then(ok).catch(() => fallbackCopy(texto, ok));
+  else fallbackCopy(texto, ok);
 }
 function fallbackCopy(texto, ok) {
-  const ta = document.createElement("textarea"); ta.value = texto;
-  ta.style.position = "fixed"; ta.style.opacity = "0"; document.body.appendChild(ta); ta.focus(); ta.select();
+  const ta = document.createElement("textarea"); ta.value = texto; ta.style.position = "fixed"; ta.style.opacity = "0";
+  document.body.appendChild(ta); ta.focus(); ta.select();
   try { document.execCommand("copy"); ok(); } catch (e) { status("Não consegui copiar.", "err"); }
   document.body.removeChild(ta);
 }
 function itemCriar(nome) {
   const li = document.createElement("li"); li.className = "criar";
   const n = document.createElement("span"); n.className = "nome"; n.textContent = '➕ Criar “' + nome + '”';
-  li.appendChild(n);
-  li.addEventListener("click", () => criarPasta(nome));
+  li.appendChild(n); li.addEventListener("click", () => criarPasta(nome));
   return li;
 }
 
@@ -170,10 +192,8 @@ function melhorDoUso(rem) {
 async function descobrirSugestao(rem) {
   try {
     const url = "https://graph.microsoft.com/v1.0/me/messages?$top=25&$select=parentFolderId&$search=" + encodeURIComponent('"from:' + rem + '"');
-    const r = await graphFetch(url);
-    if (!r.ok) return;
-    const data = await r.json();
-    const counts = {};
+    const r = await graphFetch(url); if (!r.ok) return;
+    const data = await r.json(); const counts = {};
     (data.value || []).forEach((m) => { const f = m.parentFolderId; if (pastasById[f] && !ehSistema(pastasById[f].displayName)) counts[f] = (counts[f] || 0) + 1; });
     let best = null, bestN = 0;
     Object.keys(counts).forEach((f) => { if (counts[f] > bestN) { best = f; bestN = counts[f]; } });
@@ -186,14 +206,13 @@ function mostrarSugerida(folderId) {
   $("sugWrap").classList.remove("hidden");
 }
 
-/* ---------- arquivar (+ aprende, + contagem) ---------- */
+/* ---------- arquivar (usa o itemId atual; aprende; atualiza contagem) ---------- */
 async function arquivar(folderId, folderName) {
-  const item = Office.context.mailbox.item;
-  if (!item || !item.itemId) { status("Seleciona primeiro um email.", "err"); return; }
-  const rem = emailAtual.remetente;
+  if (!emailAtual.itemId) { status("Seleciona primeiro um email.", "err"); return; }
+  const rem = emailAtual.remetente, alvo = emailAtual.itemId;
   status('A arquivar em "' + folderName + '"…');
   try {
-    const restId = Office.context.mailbox.convertToRestId(item.itemId, Office.MailboxEnums.RestVersion.v2_0);
+    const restId = Office.context.mailbox.convertToRestId(alvo, Office.MailboxEnums.RestVersion.v2_0);
     const r = await graphFetch("https://graph.microsoft.com/v1.0/me/messages/" + restId + "/move", {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ destinationId: folderId }),
     });
@@ -201,12 +220,9 @@ async function arquivar(folderId, folderName) {
       aprender(rem, folderId);
       if (pastasById[folderId]) { pastasById[folderId].totalItemCount = (pastasById[folderId].totalItemCount || 0) + 1; renderLista(); }
       status('✅ Arquivado em "' + folderName + '".', "ok");
-      $("email").className = "card vazio"; $("email").textContent = "Arquivado. Seleciona outro email.";
-      $("sugWrap").classList.add("hidden");
+      definirEmail(null);
       refreshPastas().catch(() => {});
-    } else {
-      status("Não deu para arquivar (" + r.status + "): " + (await r.text()).slice(0, 250), "err");
-    }
+    } else { status("Não deu para arquivar (" + r.status + "): " + (await r.text()).slice(0, 250), "err"); }
   } catch (e) { status("Erro ao arquivar: " + ((e && e.message) || e), "err"); }
 }
 function aprender(rem, folderId) {
@@ -217,8 +233,7 @@ function aprender(rem, folderId) {
 
 /* ---------- criar pasta (via procura) ---------- */
 async function criarPasta(nome) {
-  nome = (nome || "").trim();
-  if (!nome) return;
+  nome = (nome || "").trim(); if (!nome) return;
   status('A criar a pasta "' + nome + '"…');
   try {
     const r = await graphFetch("https://graph.microsoft.com/v1.0/me/mailFolders", {
@@ -228,8 +243,7 @@ async function criarPasta(nome) {
     const nova = await r.json();
     pastas.push({ id: nova.id, displayName: nova.displayName, totalItemCount: nova.totalItemCount || 0 });
     pastas.sort((a, b) => (a.displayName || "").localeCompare(b.displayName || "", "pt"));
-    setPastas(pastas);
-    localStorage.setItem(LS_PASTAS, JSON.stringify(pastas));
+    setPastas(pastas); localStorage.setItem(LS_PASTAS, JSON.stringify(pastas));
     $("busca").value = ""; renderLista();
     if (emailAtual.itemId) { await arquivar(nova.id, nova.displayName); }
     else { status('✅ Pasta "' + nova.displayName + '" criada.', "ok"); }
