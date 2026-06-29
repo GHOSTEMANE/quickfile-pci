@@ -7,6 +7,7 @@ const SCOPES = ["Mail.ReadWrite", "User.Read"];
 let msalInstance;
 
 Office.onReady((info) => {
+  applyOfficeTheme();
   const statusEl = document.getElementById("status");
   if (info.host !== Office.HostType.Outlook) {
     statusEl.textContent = "Este add-in destina-se ao Outlook.";
@@ -15,6 +16,18 @@ Office.onReady((info) => {
   statusEl.textContent = "Add-in a funcionar ✅ — carrega no botão para ver as tuas pastas.";
   document.getElementById("btnPastas").addEventListener("click", verPastas);
 });
+
+/** Alinha as cores do painel com o tema atual do Outlook (claro/escuro). */
+function applyOfficeTheme() {
+  try {
+    const t = Office.context && Office.context.officeTheme;
+    if (!t) return;
+    const s = document.documentElement.style;
+    if (t.bodyBackgroundColor) s.setProperty("--bg", t.bodyBackgroundColor);
+    if (t.bodyForegroundColor) s.setProperty("--fg", t.bodyForegroundColor);
+    if (t.controlBackgroundColor) s.setProperty("--panel", t.controlBackgroundColor);
+  } catch (e) { /* mantem o tema do CSS */ }
+}
 
 async function initMsal() {
   if (!msalInstance) {
@@ -33,7 +46,6 @@ async function getToken() {
     const r = await msalInstance.acquireTokenSilent(req);
     return r.accessToken;
   } catch (silentError) {
-    // Sem sessao em cache ou consentimento em falta -> login interativo.
     const r = await msalInstance.acquireTokenPopup(req);
     return r.accessToken;
   }
@@ -68,11 +80,16 @@ async function verPastas() {
 
     const ul = document.createElement("ul");
     pastas
-      .sort((a, b) => (a.displayName || "").localeCompare(b.displayName || ""))
+      .sort((a, b) => (a.displayName || "").localeCompare(b.displayName || "", "pt"))
       .forEach((p) => {
         const li = document.createElement("li");
-        const n = typeof p.totalItemCount === "number" ? " (" + p.totalItemCount + ")" : "";
-        li.textContent = (p.displayName || "(sem nome)") + n;
+        const nome = document.createElement("span");
+        nome.textContent = p.displayName || "(sem nome)";
+        const cnt = document.createElement("span");
+        cnt.className = "cnt";
+        cnt.textContent = typeof p.totalItemCount === "number" ? String(p.totalItemCount) : "";
+        li.appendChild(nome);
+        li.appendChild(cnt);
         ul.appendChild(li);
       });
     contentEl.appendChild(ul);
