@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <OfficeApp xmlns="http://schemas.microsoft.com/office/appforoffice/1.1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:bt="http://schemas.microsoft.com/office/officeappbasictypes/1.0" xmlns:mailappor="http://schemas.microsoft.com/office/mailappversionoverrides/1.0" xsi:type="MailApp">
-  <Id>5D44DC63-5CE1-4660-A99E-4B79042BA1AA</Id>
+  <Id>80F97E0E-8951-41B4-B5DE-A25B9A513F4D</Id>
   <Version>1.0.0.0</Version>
   <ProviderName>Israel Jesus (PCI)</ProviderName>
   <DefaultLocale>pt-PT</DefaultLocale>
-  <DisplayName DefaultValue="Arquivar" />
+  <DisplayName DefaultValue="Arquivar PCI" />
   <Description DefaultValue="Arquiva emails em pastas com sugestao automatica e menu ao enviar. Feito a medida." />
   <IconUrl DefaultValue="https://ghostemane.github.io/quickfile-pci/assets/icon-64.png" />
   <HighResolutionIconUrl DefaultValue="https://ghostemane.github.io/quickfile-pci/assets/icon-128.png" />
@@ -79,9 +79,9 @@
           <bt:Url id="Commands.Url" DefaultValue="https://ghostemane.github.io/quickfile-pci/src/commands.html" />
         </bt:Urls>
         <bt:ShortStrings>
-          <bt:String id="GroupLabel" DefaultValue="Arquivar" />
-          <bt:String id="TaskpaneButton.Label" DefaultValue="Arquivar" />
-          <bt:String id="TaskpaneButton.Title" DefaultValue="Arquivar email" />
+          <bt:String id="GroupLabel" DefaultValue="Arquivar PCI" />
+          <bt:String id="TaskpaneButton.Label" DefaultValue="Arquivar PCI" />
+          <bt:String id="TaskpaneButton.Title" DefaultValue="Arquivar PCI" />
         </bt:ShortStrings>
         <bt:LongStrings>
           <bt:String id="TaskpaneButton.Tooltip" DefaultValue="Abrir o painel para arquivar este email numa pasta." />
