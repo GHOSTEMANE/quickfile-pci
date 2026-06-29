@@ -26,7 +26,7 @@ Office.onReady((info) => {
   try { Office.context.mailbox.addHandlerAsync(Office.EventType.ItemChanged, detetarSelecao); } catch (e) {}
   try { Office.context.mailbox.addHandlerAsync(Office.EventType.SelectedItemsChanged, detetarSelecao); } catch (e) {}
   setInterval(detetarSelecao, 400);                          // segue a troca de email (robusto)
-  setInterval(() => refreshPastas().catch(() => {}), 20000);
+  setInterval(() => refreshPastas().catch(() => {}), 12000);
   document.addEventListener("visibilitychange", () => { if (!document.hidden) { refreshPastas().catch(() => {}); detetarSelecao(); } });
 
   detetarSelecao();
@@ -210,20 +210,23 @@ function mostrarSugerida(folderId) {
 async function arquivar(folderId, folderName) {
   if (!emailAtual.itemId) { status("Seleciona primeiro um email.", "err"); return; }
   const rem = emailAtual.remetente, alvo = emailAtual.itemId;
-  status('A arquivar em "' + folderName + '"…');
+  // feedback otimista imediato (parece instantaneo); a rede trata do resto
+  status('✅ Arquivado em "' + folderName + '".', "ok");
+  aprender(rem, folderId);
+  if (pastasById[folderId]) { pastasById[folderId].totalItemCount = (pastasById[folderId].totalItemCount || 0) + 1; renderLista(); }
   try {
     const restId = Office.context.mailbox.convertToRestId(alvo, Office.MailboxEnums.RestVersion.v2_0);
     const r = await graphFetch("https://graph.microsoft.com/v1.0/me/messages/" + restId + "/move", {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ destinationId: folderId }),
     });
-    if (r.ok) {
-      aprender(rem, folderId);
-      if (pastasById[folderId]) { pastasById[folderId].totalItemCount = (pastasById[folderId].totalItemCount || 0) + 1; renderLista(); }
-      status('✅ Arquivado em "' + folderName + '".', "ok");
-      definirEmail(null);
-      refreshPastas().catch(() => {});
-    } else { status("Não deu para arquivar (" + r.status + "): " + (await r.text()).slice(0, 250), "err"); }
-  } catch (e) { status("Erro ao arquivar: " + ((e && e.message) || e), "err"); }
+    if (!r.ok) {
+      if (pastasById[folderId]) { pastasById[folderId].totalItemCount = Math.max(0, (pastasById[folderId].totalItemCount || 1) - 1); renderLista(); }
+      status("⚠️ Afinal não deu para arquivar (" + r.status + "). Tenta de novo.", "err");
+    } else { refreshPastas().catch(() => {}); }
+  } catch (e) {
+    if (pastasById[folderId]) { pastasById[folderId].totalItemCount = Math.max(0, (pastasById[folderId].totalItemCount || 1) - 1); renderLista(); }
+    status("⚠️ Erro ao arquivar: " + ((e && e.message) || e), "err");
+  }
 }
 function aprender(rem, folderId) {
   if (!rem) return;
