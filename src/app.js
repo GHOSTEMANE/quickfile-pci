@@ -1,4 +1,4 @@
-/* Arquivar — Fases 4/5/6: arquivar + sugestao + criar pasta. Rapido (cache pastas, sessao). */
+/* Arquivar — arquivar + sugestao + criar/sincronizar pastas. Rapido (cache pastas, sessao). */
 
 const CLIENT_ID = "b23c4cee-bc85-4b4c-ad0a-a4422b028cda";
 const AUTHORITY = "https://login.microsoftonline.com/6b1e5ee4-5f29-4a83-9c85-ac56ea7118d2";
@@ -20,12 +20,12 @@ const ehSistema = (n) => SISTEMA.includes((n || "").toLowerCase());
 
 Office.onReady((info) => {
   if (info.host !== Office.HostType.Outlook) { status("Este add-in destina-se ao Outlook."); return; }
-  $("busca").addEventListener("input", () => renderLista());
+  $("busca").addEventListener("input", renderLista);
+  $("busca").addEventListener("focus", () => refreshPastas().catch(() => {})); // sincroniza ao ir procurar
   $("btnLogin").addEventListener("click", () => bootstrap(true));
-  $("novaPasta").addEventListener("keydown", (ev) => { if (ev.key === "Enter") criarPasta($("novaPasta").value); });
   try { Office.context.mailbox.addHandlerAsync(Office.EventType.ItemChanged, atualizarSeMudou); } catch (e) {}
-  setInterval(atualizarSeMudou, 700); // segue a troca de email
-  // apanha pastas criadas fora (no Outlook) ao voltar ao painel
+  setInterval(atualizarSeMudou, 700);                                  // segue a troca de email
+  setInterval(() => refreshPastas().catch(() => {}), 30000);          // apanha pastas apagadas/criadas/renomeadas
   document.addEventListener("visibilitychange", () => { if (!document.hidden) refreshPastas().catch(() => {}); });
 
   renderEmail();
@@ -107,13 +107,15 @@ function setPastas(lista) {
   lista.forEach((p) => { pastasById[p.id] = p; });
   renderLista();
 }
-function mostrarUI() { $("busca").classList.remove("hidden"); $("novaWrap").classList.remove("hidden"); }
+function mostrarUI() { $("busca").classList.remove("hidden"); }
 
-/* ---------- render lista ---------- */
+/* ---------- render lista (com opcao de criar) ---------- */
 function renderLista() {
-  const q = $("busca").value.trim().toLowerCase();
+  const q = $("busca").value.trim();
+  const ql = q.toLowerCase();
   const ul = $("lista"); ul.innerHTML = "";
-  pastas.filter((p) => !q || (p.displayName || "").toLowerCase().includes(q)).forEach((p) => ul.appendChild(itemPasta(p)));
+  pastas.filter((p) => !ql || (p.displayName || "").toLowerCase().includes(ql)).forEach((p) => ul.appendChild(itemPasta(p)));
+  if (q && !pastas.some((p) => (p.displayName || "").toLowerCase() === ql)) ul.appendChild(itemCriar(q));
 }
 function itemPasta(p, sugerida) {
   const li = document.createElement("li");
@@ -123,6 +125,13 @@ function itemPasta(p, sugerida) {
   cnt.textContent = typeof p.totalItemCount === "number" ? String(p.totalItemCount) : "";
   li.appendChild(nome); li.appendChild(cnt);
   li.addEventListener("click", () => arquivar(p.id, p.displayName));
+  return li;
+}
+function itemCriar(nome) {
+  const li = document.createElement("li"); li.className = "criar";
+  const n = document.createElement("span"); n.className = "nome"; n.textContent = '➕ Criar “' + nome + '”';
+  li.appendChild(n);
+  li.addEventListener("click", () => criarPasta(nome));
   return li;
 }
 
@@ -160,7 +169,7 @@ function mostrarSugerida(folderId) {
   $("sugWrap").classList.remove("hidden");
 }
 
-/* ---------- arquivar (+ aprende, + atualiza contagem) ---------- */
+/* ---------- arquivar (+ aprende, + contagem) ---------- */
 async function arquivar(folderId, folderName) {
   const item = Office.context.mailbox.item;
   if (!item || !item.itemId) { status("Seleciona primeiro um email.", "err"); return; }
@@ -177,7 +186,7 @@ async function arquivar(folderId, folderName) {
       status('✅ Arquivado em "' + folderName + '".', "ok");
       $("email").className = "card vazio"; $("email").textContent = "Arquivado. Seleciona outro email.";
       $("sugWrap").classList.add("hidden");
-      refreshPastas().catch(() => {}); // sincroniza contagens com o servidor
+      refreshPastas().catch(() => {});
     } else {
       status("Não deu para arquivar (" + r.status + "): " + (await r.text()).slice(0, 250), "err");
     }
@@ -189,7 +198,7 @@ function aprender(rem, folderId) {
   localStorage.setItem(LS_USO, JSON.stringify(uso));
 }
 
-/* ---------- criar pasta (Fase 6) ---------- */
+/* ---------- criar pasta (via procura) ---------- */
 async function criarPasta(nome) {
   nome = (nome || "").trim();
   if (!nome) return;
@@ -204,7 +213,7 @@ async function criarPasta(nome) {
     pastas.sort((a, b) => (a.displayName || "").localeCompare(b.displayName || "", "pt"));
     setPastas(pastas);
     localStorage.setItem(LS_PASTAS, JSON.stringify(pastas));
-    $("novaPasta").value = "";
+    $("busca").value = ""; renderLista();
     if (emailAtual.itemId) { await arquivar(nova.id, nova.displayName); }
     else { status('✅ Pasta "' + nova.displayName + '" criada.', "ok"); }
   } catch (e) { status("Erro ao criar pasta: " + ((e && e.message) || e), "err"); }
