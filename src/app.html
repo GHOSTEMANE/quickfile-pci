@@ -3,31 +3,62 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
   <title>Arquivar</title>
   <script src="https://appsforoffice.microsoft.com/lib/1.1/hosted/office.js"></script>
   <script src="vendor/msal-browser.min.js"></script>
   <style>
-    html, body { margin:0; background:#1e1e1e; color:#ffffff;
+    html, body { margin:0; background:#1e1e1e; color:#fff;
       font-family:-apple-system,"Segoe UI",Roboto,sans-serif; }
-    body { padding:16px; font-size:14px; -webkit-font-smoothing:antialiased; }
-    h1 { font-size:16px; margin:0 0 14px; font-weight:600; }
-    #status { background:#2c2c2c; border:1px solid #3a3a3a; border-radius:8px;
-      padding:10px 12px; font-size:13px; margin-bottom:12px; color:#ffffff; }
-    button { width:100%; background:#2b88d8; color:#ffffff; border:0; border-radius:8px;
+    body { padding:14px 16px 24px; font-size:14px; -webkit-font-smoothing:antialiased; }
+    h1 { font-size:15px; margin:0 0 12px; font-weight:600; display:flex; align-items:center; gap:8px; }
+
+    .card { background:#2a2a2a; border:1px solid #3a3a3a; border-radius:10px; padding:11px 13px; margin-bottom:12px; }
+    .card .assunto { font-weight:600; line-height:1.35; word-break:break-word; }
+    .card .de { color:#9aa0a6; font-size:12px; margin-top:3px; }
+    .card.vazio { color:#9aa0a6; font-weight:400; }
+
+    #status { font-size:12.5px; color:#cfcfcf; margin:0 2px 10px; min-height:16px; }
+    #status.ok { color:#5fd08a; }
+    #status.err { color:#ff8a8a; white-space:pre-wrap; word-break:break-word; }
+
+    button { width:100%; background:#2b88d8; color:#fff; border:0; border-radius:8px;
       padding:11px 14px; font:inherit; font-weight:600; cursor:pointer; }
     button:hover { filter:brightness(1.08); }
-    ul { list-style:none; margin:14px 0 0; padding:0; }
-    li { display:flex; justify-content:space-between; gap:10px; align-items:center;
-      padding:9px 4px; border-bottom:1px solid #3a3a3a; font-size:13px; color:#ffffff; }
-    li .cnt { color:#9aa0a6; font-variant-numeric:tabular-nums; }
-    .err { color:#ff8a8a; white-space:pre-wrap; word-break:break-word; }
+
+    #busca { width:100%; box-sizing:border-box; background:#2a2a2a; color:#fff;
+      border:1px solid #3a3a3a; border-radius:8px; padding:9px 11px; font:inherit; font-size:13px; margin-bottom:8px; }
+    #busca::placeholder { color:#8a8a8a; }
+    #busca:focus { outline:none; border-color:#2b88d8; }
+
+    .hint { font-size:12px; color:#9aa0a6; margin:0 2px 8px; }
+
+    ul { list-style:none; margin:0; padding:0; }
+    li { display:flex; justify-content:space-between; align-items:center; gap:10px;
+      padding:10px 11px; border-radius:8px; cursor:pointer; border:1px solid transparent; }
+    li:hover { background:#2f6ea8; border-color:#3f86c9; }
+    li .nome { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    li .cnt { color:#9aa0a6; font-variant-numeric:tabular-nums; font-size:12px; flex:none; }
+    li:hover .cnt { color:#dfe9f5; }
+
+    .hidden { display:none !important; }
   </style>
 </head>
 <body>
   <h1>📥&nbsp; Arquivar</h1>
+
+  <div id="email" class="card vazio">Nenhum email selecionado.</div>
+
   <div id="status">A carregar…</div>
-  <button id="btnPastas">Ver as minhas pastas</button>
-  <div id="content"></div>
+
+  <button id="btnCarregar">Ativar / Ver pastas</button>
+
+  <input id="busca" class="hidden" type="text" placeholder="Procurar pasta…" autocomplete="off" />
+  <div id="hint" class="hint hidden">Clica numa pasta para arquivar o email aqui:</div>
+  <ul id="lista"></ul>
+
   <script src="app.js"></script>
 </body>
 </html>

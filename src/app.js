@@ -1,22 +1,46 @@
-/* Arquivar — Fase 3: autenticacao (NAA) + listar pastas via Microsoft Graph.
-   Cores fixas (fundo escuro / texto branco) no CSS — sem deteccao de tema. */
+/* Arquivar — Fase 4: mostrar o email selecionado + arquivar numa pasta (Graph move).
+   Auth por NAA (MSAL). Cores fixas (tema escuro) no CSS. */
 
 const CLIENT_ID = "b23c4cee-bc85-4b4c-ad0a-a4422b028cda";
 const AUTHORITY = "https://login.microsoftonline.com/6b1e5ee4-5f29-4a83-9c85-ac56ea7118d2";
 const SCOPES = ["Mail.ReadWrite", "User.Read"];
 
 let msalInstance;
+let pastas = null; // cache: [{id, displayName, totalItemCount}]
+
+const $ = (id) => document.getElementById(id);
+function status(msg, cls) { const s = $("status"); s.textContent = msg; s.className = cls || ""; }
 
 Office.onReady((info) => {
-  const statusEl = document.getElementById("status");
-  if (info.host !== Office.HostType.Outlook) {
-    statusEl.textContent = "Este add-in destina-se ao Outlook.";
-    return;
-  }
-  statusEl.textContent = "Add-in a funcionar ✅ — carrega no botão para ver as tuas pastas.";
-  document.getElementById("btnPastas").addEventListener("click", verPastas);
+  if (info.host !== Office.HostType.Outlook) { status("Este add-in destina-se ao Outlook."); return; }
+  renderEmail();
+  try {
+    Office.context.mailbox.addHandlerAsync(Office.EventType.ItemChanged, renderEmail);
+  } catch (e) { /* sem suporte a ItemChanged: ignora */ }
+  $("btnCarregar").addEventListener("click", () => carregarPastas(false));
+  $("busca").addEventListener("input", filtrar);
+  // Tenta carregar as pastas em silencio (se ja houver sessao).
+  carregarPastas(true);
 });
 
+/* ---------- Email selecionado ---------- */
+function renderEmail() {
+  const el = $("email");
+  const item = Office.context.mailbox.item;
+  if (item && item.subject) {
+    const de = (item.from && (item.from.displayName || item.from.emailAddress)) || "";
+    el.className = "card";
+    el.innerHTML = "";
+    const a = document.createElement("div"); a.className = "assunto"; a.textContent = item.subject;
+    const d = document.createElement("div"); d.className = "de"; d.textContent = de ? ("de " + de) : "";
+    el.appendChild(a); el.appendChild(d);
+  } else {
+    el.className = "card vazio";
+    el.textContent = "Seleciona um email na lista.";
+  }
+}
+
+/* ---------- Autenticacao (NAA) ---------- */
 async function initMsal() {
   if (!msalInstance) {
     msalInstance = await msal.createNestablePublicClientApplication({
@@ -25,64 +49,81 @@ async function initMsal() {
     });
   }
 }
-
-async function getToken() {
+async function getToken(allowPopup) {
   await initMsal();
   const req = { scopes: SCOPES };
   try {
-    const r = await msalInstance.acquireTokenSilent(req);
-    return r.accessToken;
-  } catch (silentError) {
-    const r = await msalInstance.acquireTokenPopup(req);
-    return r.accessToken;
+    return (await msalInstance.acquireTokenSilent(req)).accessToken;
+  } catch (e) {
+    if (!allowPopup) throw e;
+    return (await msalInstance.acquireTokenPopup(req)).accessToken;
   }
 }
 
-async function verPastas() {
-  const statusEl = document.getElementById("status");
-  const contentEl = document.getElementById("content");
-  contentEl.className = "";
-  contentEl.innerHTML = "";
-  statusEl.textContent = "A autenticar…";
-
+/* ---------- Pastas ---------- */
+async function carregarPastas(silent) {
+  status("A ligar à tua conta…");
   try {
-    const token = await getToken();
-    statusEl.textContent = "A obter as pastas…";
-
+    const token = await getToken(!silent);
+    status("A obter as pastas…");
     const url = "https://graph.microsoft.com/v1.0/me/mailFolders" +
-                "?$top=200&$select=displayName,totalItemCount";
+                "?$top=200&$select=id,displayName,totalItemCount";
     const resp = await fetch(url, { headers: { Authorization: "Bearer " + token } });
-
-    if (!resp.ok) {
-      const txt = await resp.text();
-      statusEl.textContent = "Erro do Microsoft Graph (" + resp.status + ").";
-      contentEl.className = "err";
-      contentEl.textContent = txt.slice(0, 500);
-      return;
-    }
-
+    if (!resp.ok) { status("Erro do Graph (" + resp.status + "): " + (await resp.text()).slice(0, 300), "err"); return; }
     const data = await resp.json();
-    const pastas = data.value || [];
-    statusEl.textContent = "✅ Encontrei " + pastas.length + " pastas na tua conta:";
-
-    const ul = document.createElement("ul");
-    pastas
-      .sort((a, b) => (a.displayName || "").localeCompare(b.displayName || "", "pt"))
-      .forEach((p) => {
-        const li = document.createElement("li");
-        const nome = document.createElement("span");
-        nome.textContent = p.displayName || "(sem nome)";
-        const cnt = document.createElement("span");
-        cnt.className = "cnt";
-        cnt.textContent = typeof p.totalItemCount === "number" ? String(p.totalItemCount) : "";
-        li.appendChild(nome);
-        li.appendChild(cnt);
-        ul.appendChild(li);
-      });
-    contentEl.appendChild(ul);
+    pastas = (data.value || []).sort((a, b) => (a.displayName || "").localeCompare(b.displayName || "", "pt"));
+    $("btnCarregar").classList.add("hidden");
+    $("busca").classList.remove("hidden");
+    $("hint").classList.remove("hidden");
+    status("Pronto — escolhe a pasta.", "ok");
+    renderPastas(pastas);
   } catch (e) {
-    statusEl.textContent = "Não consegui autenticar.";
-    contentEl.className = "err";
-    contentEl.textContent = String((e && e.message) ? e.message : e);
+    if (silent) { status("Carrega no botão para ligar a tua conta."); }
+    else { status("Não consegui ligar: " + ((e && e.message) || e), "err"); }
+  }
+}
+
+function renderPastas(lista) {
+  const ul = $("lista");
+  ul.innerHTML = "";
+  lista.forEach((p) => {
+    const li = document.createElement("li");
+    const nome = document.createElement("span"); nome.className = "nome"; nome.textContent = p.displayName || "(sem nome)";
+    const cnt = document.createElement("span"); cnt.className = "cnt";
+    cnt.textContent = typeof p.totalItemCount === "number" ? String(p.totalItemCount) : "";
+    li.appendChild(nome); li.appendChild(cnt);
+    li.addEventListener("click", () => arquivar(p.id, p.displayName));
+    ul.appendChild(li);
+  });
+}
+
+function filtrar() {
+  if (!pastas) return;
+  const q = $("busca").value.trim().toLowerCase();
+  renderPastas(q ? pastas.filter((p) => (p.displayName || "").toLowerCase().includes(q)) : pastas);
+}
+
+/* ---------- Arquivar ---------- */
+async function arquivar(folderId, folderName) {
+  const item = Office.context.mailbox.item;
+  if (!item || !item.itemId) { status("Seleciona primeiro um email na lista.", "err"); return; }
+  status('A arquivar em "' + folderName + '"…');
+  try {
+    const restId = Office.context.mailbox.convertToRestId(item.itemId, Office.MailboxEnums.RestVersion.v2_0);
+    const token = await getToken(true);
+    const resp = await fetch("https://graph.microsoft.com/v1.0/me/messages/" + restId + "/move", {
+      method: "POST",
+      headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
+      body: JSON.stringify({ destinationId: folderId }),
+    });
+    if (resp.ok) {
+      status('✅ Arquivado em "' + folderName + '".', "ok");
+      $("email").className = "card vazio";
+      $("email").textContent = "Email arquivado. Seleciona outro.";
+    } else {
+      status("Não deu para arquivar (" + resp.status + "): " + (await resp.text()).slice(0, 300), "err");
+    }
+  } catch (e) {
+    status("Erro ao arquivar: " + ((e && e.message) || e), "err");
   }
 }
