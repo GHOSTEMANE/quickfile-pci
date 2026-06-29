@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Arquivar</title>
   <script src="https://appsforoffice.microsoft.com/lib/1.1/hosted/office.js"></script>
+  <script src="vendor/msal-browser.min.js"></script>
   <style>
     :root { --azul:#0f6cbd; }
     * { box-sizing:border-box; }
@@ -12,9 +13,15 @@
     header { display:flex; align-items:center; gap:10px; margin-bottom:14px; }
     header .dot { width:28px; height:28px; border-radius:7px; background:var(--azul); }
     h1 { font-size:16px; margin:0; font-weight:600; }
-    #status { font-size:13px; padding:9px 11px; border-radius:7px; background:#f3f6fb; margin-bottom:14px; }
-    #content { font-size:14px; line-height:1.4; }
+    #status { font-size:13px; padding:9px 11px; border-radius:7px; background:#f3f6fb; margin-bottom:12px; }
+    button { font:inherit; font-size:14px; font-weight:600; color:#fff; background:var(--azul);
+             border:0; border-radius:7px; padding:10px 14px; cursor:pointer; width:100%; }
+    button:hover { background:#0c599b; }
+    #content { font-size:13px; line-height:1.45; margin-top:12px; }
+    #content ul { margin:0; padding-left:18px; }
+    #content li { margin:2px 0; }
     .muted { color:#616161; }
+    .err { color:#b10e1c; white-space:pre-wrap; word-break:break-word; }
   </style>
 </head>
 <body>
@@ -23,6 +30,7 @@
     <h1>Arquivar</h1>
   </header>
   <div id="status">A carregar…</div>
+  <button id="btnPastas">Ver as minhas pastas</button>
   <div id="content" class="muted">—</div>
   <script src="taskpane.js"></script>
 </body>
