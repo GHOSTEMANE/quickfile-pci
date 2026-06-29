@@ -25,7 +25,8 @@ Office.onReady((info) => {
   if (info.host !== Office.HostType.Outlook) { status("Este add-in destina-se ao Outlook."); return; }
   $("busca").addEventListener("input", () => renderLista());
   $("btnLogin").addEventListener("click", () => bootstrap(true));
-  try { Office.context.mailbox.addHandlerAsync(Office.EventType.ItemChanged, onItemChanged); } catch (e) {}
+  try { Office.context.mailbox.addHandlerAsync(Office.EventType.ItemChanged, atualizarSeMudou); } catch (e) {}
+  setInterval(atualizarSeMudou, 700); // fallback garantido: segue a troca de email mesmo sem evento
 
   renderEmail();
   const cache = JSON.parse(localStorage.getItem(LS_PASTAS) || "null");
@@ -50,7 +51,11 @@ function renderEmail() {
     el.className = "card vazio"; el.textContent = "Seleciona um email na lista.";
   }
 }
-function onItemChanged() { renderEmail(); calcularSugestao(); }
+function atualizarSeMudou() {
+  const item = Office.context.mailbox.item;
+  const id = item ? item.itemId : null;
+  if (id !== emailAtual.itemId) { renderEmail(); calcularSugestao(); }
+}
 
 /* ---------- auth ---------- */
 async function initMsal() {
