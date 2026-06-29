@@ -20,7 +20,7 @@
   <FormSettings>
     <Form xsi:type="ItemRead">
       <DesktopSettings>
-        <SourceLocation DefaultValue="https://ghostemane.github.io/quickfile-pci/src/taskpane.html" />
+        <SourceLocation DefaultValue="https://ghostemane.github.io/quickfile-pci/src/app.html" />
         <RequestedHeight>300</RequestedHeight>
       </DesktopSettings>
     </Form>
@@ -75,7 +75,7 @@
           <bt:Image id="Icon.80" DefaultValue="https://ghostemane.github.io/quickfile-pci/assets/icon-80.png" />
         </bt:Images>
         <bt:Urls>
-          <bt:Url id="Taskpane.Url" DefaultValue="https://ghostemane.github.io/quickfile-pci/src/taskpane.html" />
+          <bt:Url id="Taskpane.Url" DefaultValue="https://ghostemane.github.io/quickfile-pci/src/app.html" />
           <bt:Url id="Commands.Url" DefaultValue="https://ghostemane.github.io/quickfile-pci/src/commands.html" />
         </bt:Urls>
         <bt:ShortStrings>
