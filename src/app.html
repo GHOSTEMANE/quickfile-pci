@@ -24,10 +24,12 @@
     #status.ok { color:#5fd08a; }
     #status.err { color:#ff8a8a; white-space:pre-wrap; word-break:break-word; }
 
-    #busca { width:100%; box-sizing:border-box; background:#2a2a2a; color:#fff;
-      border:1px solid #3a3a3a; border-radius:8px; padding:9px 11px; font:inherit; font-size:13px; margin-bottom:10px; }
-    #busca::placeholder { color:#8a8a8a; }
-    #busca:focus { outline:none; border-color:#2b88d8; }
+    .inp { width:100%; box-sizing:border-box; background:#2a2a2a; color:#fff;
+      border:1px solid #3a3a3a; border-radius:8px; padding:9px 11px; font:inherit; font-size:13px; }
+    .inp::placeholder { color:#8a8a8a; }
+    .inp:focus { outline:none; border-color:#2b88d8; }
+    #busca { margin-bottom:10px; }
+    #novaWrap { margin-top:12px; }
 
     .seclabel { font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:#8a8a8a; margin:6px 2px 5px; }
 
@@ -55,7 +57,7 @@
   <div id="email" class="card vazio">A carregar…</div>
   <div id="status"></div>
 
-  <input id="busca" class="hidden" type="text" placeholder="Procurar pasta…" autocomplete="off" />
+  <input id="busca" class="inp hidden" type="text" placeholder="Procurar pasta…" autocomplete="off" />
 
   <div id="sugWrap" class="hidden">
     <div class="seclabel">Sugerida</div>
@@ -64,8 +66,13 @@
   </div>
 
   <ul id="lista"></ul>
+
+  <div id="novaWrap" class="hidden">
+    <input id="novaPasta" class="inp" type="text" placeholder="➕ Nova pasta (Enter cria e arquiva)" autocomplete="off" />
+  </div>
+
   <button id="btnLogin" class="hidden">Iniciar sessão</button>
 
-  <script src="app.js?v=6"></script>
+  <script src="app.js?v=7"></script>
 </body>
 </html>
