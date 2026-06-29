@@ -35,9 +35,11 @@
     li { display:flex; justify-content:space-between; align-items:center; gap:10px;
       padding:10px 11px; border-radius:8px; cursor:pointer; border:1px solid transparent; }
     li:hover { background:#2f6ea8; border-color:#3f86c9; }
-    li .nome { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    li .nome { flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     li .cnt { color:#9aa0a6; font-variant-numeric:tabular-nums; font-size:12px; flex:none; }
     li:hover .cnt { color:#dfe9f5; }
+    li .copy { flex:none; opacity:.5; font-size:14px; padding:1px 4px; border-radius:4px; }
+    li .copy:hover { opacity:1; background:rgba(255,255,255,.16); }
 
     #sugerido li.sug { background:#1c3b57; border-color:#2b88d8; }
     #sugerido li.sug .nome::before { content:"⭐ "; }
@@ -71,6 +73,6 @@
   <ul id="lista"></ul>
   <button id="btnLogin" class="hidden">Iniciar sessão</button>
 
-  <script src="app.js?v=8"></script>
+  <script src="app.js?v=9"></script>
 </body>
 </html>

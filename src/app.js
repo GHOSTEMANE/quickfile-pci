@@ -25,7 +25,7 @@ Office.onReady((info) => {
   $("btnLogin").addEventListener("click", () => bootstrap(true));
   try { Office.context.mailbox.addHandlerAsync(Office.EventType.ItemChanged, atualizarSeMudou); } catch (e) {}
   setInterval(atualizarSeMudou, 700);                                  // segue a troca de email
-  setInterval(() => refreshPastas().catch(() => {}), 30000);          // apanha pastas apagadas/criadas/renomeadas
+  setInterval(() => refreshPastas().catch(() => {}), 20000);          // apanha pastas apagadas/criadas/renomeadas
   document.addEventListener("visibilitychange", () => { if (!document.hidden) refreshPastas().catch(() => {}); });
 
   renderEmail();
@@ -123,9 +123,24 @@ function itemPasta(p, sugerida) {
   const nome = document.createElement("span"); nome.className = "nome"; nome.textContent = p.displayName || "(sem nome)";
   const cnt = document.createElement("span"); cnt.className = "cnt";
   cnt.textContent = typeof p.totalItemCount === "number" ? String(p.totalItemCount) : "";
-  li.appendChild(nome); li.appendChild(cnt);
+  const copy = document.createElement("span"); copy.className = "copy"; copy.title = "Copiar nome da pasta";
+  copy.textContent = "⧉";
+  copy.addEventListener("click", (e) => { e.stopPropagation(); copiar(p.displayName); });
+  li.appendChild(nome); li.appendChild(cnt); li.appendChild(copy);
   li.addEventListener("click", () => arquivar(p.id, p.displayName));
   return li;
+}
+function copiar(texto) {
+  const ok = () => status('✅ Copiado: ' + texto, "ok");
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(texto).then(ok).catch(() => fallbackCopy(texto, ok));
+  } else { fallbackCopy(texto, ok); }
+}
+function fallbackCopy(texto, ok) {
+  const ta = document.createElement("textarea"); ta.value = texto;
+  ta.style.position = "fixed"; ta.style.opacity = "0"; document.body.appendChild(ta); ta.focus(); ta.select();
+  try { document.execCommand("copy"); ok(); } catch (e) { status("Não consegui copiar.", "err"); }
+  document.body.removeChild(ta);
 }
 function itemCriar(nome) {
   const li = document.createElement("li"); li.className = "criar";
