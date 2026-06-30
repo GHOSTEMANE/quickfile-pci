@@ -156,8 +156,7 @@ function itemPasta(p, sugerida, caminhoTxt) {
   if (sugerida) li.className = "sug";
   li.style.paddingLeft = (8 + (caminhoTxt ? 0 : (p.level || 0) * 16)) + "px";
   const seta = document.createElement("span"); seta.className = "seta";
-  const temFilhos = (p.childFolderCount > 0) || (p.children && p.children.length);
-  if (temFilhos && !caminhoTxt) {
+  if (!caminhoTxt) {
     seta.textContent = expandido.has(p.id) ? "▾" : "▸";
     seta.addEventListener("click", (e) => { e.stopPropagation(); toggle(p.id); });
   } else { seta.className = "seta vazia"; seta.textContent = "▸"; }
