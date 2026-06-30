@@ -33,7 +33,7 @@
   <VersionOverrides xmlns="http://schemas.microsoft.com/office/mailappversionoverrides" xsi:type="VersionOverridesV1_0">
     <VersionOverrides xmlns="http://schemas.microsoft.com/office/mailappversionoverrides/1.1" xsi:type="VersionOverridesV1_1">
       <Requirements>
-        <bt:Sets DefaultMinVersion="1.5">
+        <bt:Sets DefaultMinVersion="1.13">
           <bt:Set Name="Mailbox" />
         </bt:Sets>
       </Requirements>
@@ -58,8 +58,7 @@
                     </Icon>
                     <Action xsi:type="ShowTaskpane">
                       <SourceLocation resid="Taskpane.Url" />
-                      <SupportsPinning>true</SupportsPinning>
-                      <SupportsMultiSelect>true</SupportsMultiSelect>
+                      <SupportsNoItemContext>true</SupportsNoItemContext>
                     </Action>
                   </Control>
                 </Group>
