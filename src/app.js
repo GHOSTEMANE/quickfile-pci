@@ -155,11 +155,11 @@ function itemPasta(p, sugerida, caminhoTxt) {
   const li = document.createElement("li");
   if (sugerida) li.className = "sug";
   li.style.paddingLeft = (8 + (caminhoTxt ? 0 : (p.level || 0) * 16)) + "px";
-  const seta = document.createElement("span"); seta.className = "seta";
+  const seta = document.createElement("span"); seta.className = "seta"; seta.textContent = "▶";
   if (!caminhoTxt) {
-    seta.textContent = expandido.has(p.id) ? "▾" : "▸";
+    if (expandido.has(p.id)) seta.classList.add("aberto");
     seta.addEventListener("click", (e) => { e.stopPropagation(); toggle(p.id); });
-  } else { seta.className = "seta vazia"; seta.textContent = "▸"; }
+  } else { seta.className = "seta vazia"; }
   const nome = document.createElement("span"); nome.className = "nome";
   if (caminhoTxt) { nome.innerHTML = ""; const c = document.createElement("span"); c.className = "cam"; c.textContent = caminhoTxt + " › "; nome.appendChild(c); nome.appendChild(document.createTextNode(p.displayName || "")); }
   else nome.textContent = p.displayName || "(sem nome)";
