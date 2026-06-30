@@ -14,6 +14,7 @@ let arvore = [];            // raiz (cada no: {id, displayName, totalItemCount, 
 let pastasById = {};        // todas as pastas por id
 let expandido = new Set();
 let emailAtual = { itemId: null, subject: "", remetente: "", remetenteNome: "" };
+let selecao = [];           // [{itemId, subject}] quando ha varios emails selecionados (>1)
 let uso = JSON.parse(localStorage.getItem(LS_USO) || "{}");
 
 const $ = (id) => document.getElementById(id);
@@ -44,9 +45,15 @@ function detetarSelecao() {
     mbx.getSelectedItemsAsync((res) => {
       if (!res || res.status !== Office.AsyncResultStatus.Succeeded) return detetarPorItem();
       const arr = res.value || [];
+      const eraMulti = selecao.length > 1;
+      if (arr.length > 1) {
+        selecao = arr.map((x) => ({ itemId: x.itemId, subject: x.subject || "(sem assunto)" }));
+        return definirMulti();
+      }
+      selecao = arr.length ? [{ itemId: arr[0].itemId, subject: arr[0].subject || "(sem assunto)" }] : [];
       if (!arr.length) return definirEmail(null);
       const sel = arr[0];
-      if (sel.itemId !== emailAtual.itemId) definirEmail({ itemId: sel.itemId, subject: sel.subject || "(sem assunto)" });
+      if (eraMulti || sel.itemId !== emailAtual.itemId) definirEmail({ itemId: sel.itemId, subject: sel.subject || "(sem assunto)" });
     });
   } else { detetarPorItem(); }
 }
@@ -66,6 +73,11 @@ function definirEmail(d) {
   if (emailAtual.remetente) calcularSugestao();
   else { $("sugWrap").classList.add("hidden"); obterRemetente(emailAtual.itemId); }
 }
+function definirMulti() {
+  emailAtual = { itemId: null, subject: "", remetente: "", remetenteNome: "" };
+  $("sugWrap").classList.add("hidden");
+  renderEmail();
+}
 async function obterRemetente(itemId) {
   try {
     const restId = Office.context.mailbox.convertToRestId(itemId, Office.MailboxEnums.RestVersion.v2_0);
@@ -79,6 +91,20 @@ async function obterRemetente(itemId) {
 }
 function renderEmail() {
   const el = $("email");
+  if (selecao.length > 1) {
+    el.className = "card"; el.innerHTML = "";
+    const a = document.createElement("div"); a.className = "assunto";
+    a.textContent = "📥 " + selecao.length + " emails selecionados";
+    el.appendChild(a);
+    const max = 4;
+    selecao.slice(0, max).forEach((s) => {
+      const d = document.createElement("div"); d.className = "de"; d.textContent = "• " + s.subject; el.appendChild(d);
+    });
+    if (selecao.length > max) {
+      const d = document.createElement("div"); d.className = "de"; d.textContent = "… e mais " + (selecao.length - max); el.appendChild(d);
+    }
+    return;
+  }
   if (emailAtual.itemId && emailAtual.subject) {
     el.className = "card"; el.innerHTML = "";
     const a = document.createElement("div"); a.className = "assunto"; a.textContent = emailAtual.subject;
@@ -245,6 +271,7 @@ function mostrarSugerida(folderId) {
 
 /* ---------- arquivar ---------- */
 async function arquivar(folderId, folderName) {
+  if (selecao.length > 1) return arquivarVarios(folderId, folderName);
   if (!emailAtual.itemId) { status("Seleciona primeiro um email.", "err"); return; }
   const rem = emailAtual.remetente, alvo = emailAtual.itemId;
   status('✅ Arquivado em "' + folderName + '".', "ok");
@@ -256,6 +283,30 @@ async function arquivar(folderId, folderName) {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ destinationId: folderId }) });
     if (!r.ok) { if (pastasById[folderId]) { pastasById[folderId].totalItemCount = Math.max(0, (pastasById[folderId].totalItemCount || 1) - 1); renderArvore(); } status("⚠️ Afinal não deu para arquivar (" + r.status + ").", "err"); }
   } catch (e) { if (pastasById[folderId]) { pastasById[folderId].totalItemCount = Math.max(0, (pastasById[folderId].totalItemCount || 1) - 1); renderArvore(); } status("⚠️ Erro ao arquivar: " + ((e && e.message) || e), "err"); }
+}
+async function arquivarVarios(folderId, folderName) {
+  const itens = selecao.slice();
+  const n = itens.length;
+  status("📤 A arquivar " + n + ' em "' + folderName + '"…');
+  if (pastasById[folderId]) { pastasById[folderId].totalItemCount = (pastasById[folderId].totalItemCount || 0) + n; renderArvore(); }
+  let ok = 0, falhou = 0;
+  const lote = 8;
+  for (let i = 0; i < itens.length; i += lote) {
+    await Promise.all(itens.slice(i, i + lote).map(async (it) => {
+      try {
+        const restId = Office.context.mailbox.convertToRestId(it.itemId, Office.MailboxEnums.RestVersion.v2_0);
+        const r = await graphFetch("https://graph.microsoft.com/v1.0/me/messages/" + restId + "/move", {
+          method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ destinationId: folderId }) });
+        if (r.ok) ok++; else falhou++;
+      } catch (e) { falhou++; }
+    }));
+    if (i + lote < itens.length) status("📤 A arquivar… " + (ok + falhou) + "/" + n);
+  }
+  if (falhou && pastasById[folderId]) { pastasById[folderId].totalItemCount = Math.max(0, (pastasById[folderId].totalItemCount || falhou) - falhou); renderArvore(); }
+  selecao = []; renderEmail();
+  if (!falhou) status("✅ " + ok + ' emails arquivados em "' + folderName + '".', "ok");
+  else if (ok) status("⚠️ " + ok + " arquivados, mas " + falhou + " falharam.", "err");
+  else status("⚠️ Não deu para arquivar (" + falhou + " falharam).", "err");
 }
 function aprender(rem, folderId) {
   if (!rem) return;
@@ -279,7 +330,8 @@ async function criarSubpasta(parent, nome) {
     pastasById[nova.id] = nova; expandido.add(parent.id);
     localStorage.setItem(LS_PASTAS, JSON.stringify(arvore));
     renderArvore();
-    if (emailAtual.itemId) await arquivar(nova.id, nova.displayName);
+    if (selecao.length > 1) await arquivarVarios(nova.id, nova.displayName);
+    else if (emailAtual.itemId) await arquivar(nova.id, nova.displayName);
     else status('✅ Subpasta "' + nova.displayName + '" criada.', "ok");
   } catch (e) { status("Erro ao criar: " + ((e && e.message) || e), "err"); }
 }
@@ -295,7 +347,8 @@ async function criarRaiz(nome) {
     arvore.push(nova); arvore.sort((a, b) => (a.displayName || "").localeCompare(b.displayName || "", "pt"));
     pastasById[nova.id] = nova; localStorage.setItem(LS_PASTAS, JSON.stringify(arvore));
     $("busca").value = ""; renderArvore();
-    if (emailAtual.itemId) await arquivar(nova.id, nova.displayName);
+    if (selecao.length > 1) await arquivarVarios(nova.id, nova.displayName);
+    else if (emailAtual.itemId) await arquivar(nova.id, nova.displayName);
     else status('✅ Pasta "' + nova.displayName + '" criada.', "ok");
   } catch (e) { status("Erro ao criar: " + ((e && e.message) || e), "err"); }
 }

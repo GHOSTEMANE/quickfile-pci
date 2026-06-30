@@ -58,6 +58,7 @@
                     </Icon>
                     <Action xsi:type="ShowTaskpane">
                       <SourceLocation resid="Taskpane.Url" />
+                      <SupportsMultiSelect>true</SupportsMultiSelect>
                       <SupportsNoItemContext>true</SupportsNoItemContext>
                     </Action>
                   </Control>
