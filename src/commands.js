@@ -27,4 +27,15 @@ async function onMessageSendHandler(event) {
   }
 }
 
+/* Botao "Enviar e arquivar" no friso do compose: dispara o envio.
+   O OnMessageSend intercepta e mostra o aviso -> "Escolher pasta" -> painel. */
+function arquivarEEnviar(event) {
+  try {
+    Office.context.mailbox.item.sendAsync(() => { try { event.completed(); } catch (e) {} });
+  } catch (e) {
+    try { event.completed(); } catch (e2) {}
+  }
+}
+
 Office.actions.associate("onMessageSendHandler", onMessageSendHandler);
+Office.actions.associate("arquivarEEnviar", arquivarEEnviar);
