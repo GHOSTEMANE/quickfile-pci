@@ -15,6 +15,7 @@ let pastasById = {};        // todas as pastas por id
 let expandido = new Set();
 let emailAtual = { itemId: null, subject: "", remetente: "", remetenteNome: "" };
 let selecao = [];           // [{itemId, subject}] quando ha varios emails selecionados (>1)
+let selecaoSig = "";        // assinatura da selecao multipla (evita recalcular a cada polling)
 let uso = JSON.parse(localStorage.getItem(LS_USO) || "{}");
 
 const $ = (id) => document.getElementById(id);
@@ -47,9 +48,15 @@ function detetarSelecao() {
       const arr = res.value || [];
       const eraMulti = selecao.length > 1;
       if (arr.length > 1) {
-        selecao = arr.map((x) => ({ itemId: x.itemId, subject: x.subject || "(sem assunto)" }));
-        return definirMulti();
+        const sig = arr.map((x) => x.itemId).slice().sort().join("|");
+        if (sig !== selecaoSig) {
+          selecaoSig = sig;
+          selecao = arr.map((x) => ({ itemId: x.itemId, subject: x.subject || "(sem assunto)" }));
+          definirMulti();
+        }
+        return;
       }
+      selecaoSig = "";
       selecao = arr.length ? [{ itemId: arr[0].itemId, subject: arr[0].subject || "(sem assunto)" }] : [];
       if (!arr.length) return definirEmail(null);
       const sel = arr[0];
@@ -75,8 +82,8 @@ function definirEmail(d) {
 }
 function definirMulti() {
   emailAtual = { itemId: null, subject: "", remetente: "", remetenteNome: "" };
-  $("sugWrap").classList.add("hidden");
   renderEmail();
+  calcularSugestaoMulti();
 }
 async function obterRemetente(itemId) {
   try {
@@ -267,6 +274,51 @@ function mostrarSugerida(folderId) {
   const p = pastasById[folderId]; if (!p) return;
   $("sugerido").innerHTML = ""; $("sugerido").appendChild(itemPasta(p, true, caminho(p)));
   $("sugWrap").classList.remove("hidden");
+}
+async function obterRemetentesDe(itens) {
+  const rems = []; const lote = 8;
+  for (let i = 0; i < itens.length; i += lote) {
+    const parte = await Promise.all(itens.slice(i, i + lote).map(async (it) => {
+      try {
+        const restId = Office.context.mailbox.convertToRestId(it.itemId, Office.MailboxEnums.RestVersion.v2_0);
+        const r = await graphFetch("https://graph.microsoft.com/v1.0/me/messages/" + restId + "?$select=from");
+        if (!r.ok) return null;
+        const m = await r.json();
+        return ((m.from && m.from.emailAddress && m.from.emailAddress.address) || "").toLowerCase();
+      } catch (e) { return null; }
+    }));
+    parte.forEach((x) => { if (x) rems.push(x); });
+  }
+  return rems;
+}
+async function calcularSugestaoMulti() {
+  $("sugerido").innerHTML = ""; $("sugWrap").classList.add("hidden");
+  if (!Object.keys(pastasById).length) return;
+  const sig = selecaoSig;
+  const rems = await obterRemetentesDe(selecao.slice());
+  if (selecaoSig !== sig || !rems.length) return;
+  const agg = {};
+  rems.forEach((rem) => {
+    const m = uso[rem]; if (!m) return;
+    Object.keys(m).forEach((fid) => { if (pastasById[fid] && !ehSistema(pastasById[fid].displayName)) agg[fid] = (agg[fid] || 0) + m[fid]; });
+  });
+  let best = null, bestN = 0;
+  Object.keys(agg).forEach((fid) => { if (agg[fid] > bestN) { best = fid; bestN = agg[fid]; } });
+  if (best) { if (selecaoSig === sig) mostrarSugerida(best); return; }
+  const freq = {}; rems.forEach((r) => { freq[r] = (freq[r] || 0) + 1; });
+  const remComum = Object.keys(freq).sort((a, b) => freq[b] - freq[a])[0];
+  if (remComum) descobrirSugestaoMulti(remComum, sig);
+}
+async function descobrirSugestaoMulti(rem, sig) {
+  try {
+    const url = "https://graph.microsoft.com/v1.0/me/messages?$top=25&$select=parentFolderId&$search=" + encodeURIComponent('"from:' + rem + '"');
+    const r = await graphFetch(url); if (!r.ok) return;
+    const counts = {};
+    ((await r.json()).value || []).forEach((m) => { const f = m.parentFolderId; if (pastasById[f] && !ehSistema(pastasById[f].displayName)) counts[f] = (counts[f] || 0) + 1; });
+    let best = null, bestN = 0;
+    Object.keys(counts).forEach((f) => { if (counts[f] > bestN) { best = f; bestN = counts[f]; } });
+    if (best && selecaoSig === sig) mostrarSugerida(best);
+  } catch (e) {}
 }
 
 /* ---------- arquivar ---------- */
