@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <OfficeApp xmlns="http://schemas.microsoft.com/office/appforoffice/1.1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:bt="http://schemas.microsoft.com/office/officeappbasictypes/1.0" xmlns:mailappor="http://schemas.microsoft.com/office/mailappversionoverrides/1.0" xsi:type="MailApp">
   <Id>80F97E0E-8951-41B4-B5DE-A25B9A513F4D</Id>
-  <Version>1.0.0.0</Version>
+  <Version>1.1.0.0</Version>
   <ProviderName>Israel Jesus (PCI)</ProviderName>
   <DefaultLocale>pt-PT</DefaultLocale>
   <DisplayName DefaultValue="Arquivar PCI" />
@@ -33,12 +33,17 @@
   <VersionOverrides xmlns="http://schemas.microsoft.com/office/mailappversionoverrides" xsi:type="VersionOverridesV1_0">
     <VersionOverrides xmlns="http://schemas.microsoft.com/office/mailappversionoverrides/1.1" xsi:type="VersionOverridesV1_1">
       <Requirements>
-        <bt:Sets DefaultMinVersion="1.13">
+        <bt:Sets DefaultMinVersion="1.15">
           <bt:Set Name="Mailbox" />
         </bt:Sets>
       </Requirements>
       <Hosts>
         <Host xsi:type="MailHost">
+          <Runtimes>
+            <Runtime resid="WebViewRuntime.Url">
+              <Override type="javascript" resid="JSRuntime.Url" />
+            </Runtime>
+          </Runtimes>
           <DesktopFormFactor>
             <FunctionFile resid="Commands.Url" />
             <ExtensionPoint xsi:type="MessageReadCommandSurface">
@@ -65,6 +70,49 @@
                 </Group>
               </OfficeTab>
             </ExtensionPoint>
+            <ExtensionPoint xsi:type="MessageComposeCommandSurface">
+              <OfficeTab id="TabDefault">
+                <Group id="msgComposeGroup">
+                  <Label resid="GroupLabel" />
+                  <Control xsi:type="Button" id="ArquivarComposeButton">
+                    <Label resid="TaskpaneButton.Label" />
+                    <Supertip>
+                      <Title resid="TaskpaneButton.Title" />
+                      <Description resid="TaskpaneButton.Tooltip" />
+                    </Supertip>
+                    <Icon>
+                      <bt:Image size="16" resid="Icon.16" />
+                      <bt:Image size="32" resid="Icon.32" />
+                      <bt:Image size="80" resid="Icon.80" />
+                    </Icon>
+                    <Action xsi:type="ShowTaskpane">
+                      <SourceLocation resid="Taskpane.Url" />
+                    </Action>
+                  </Control>
+                  <Control xsi:type="Button" id="arquivarEnviarButton">
+                    <Label resid="EnviarArquivar.Label" />
+                    <Supertip>
+                      <Title resid="EnviarArquivar.Label" />
+                      <Description resid="EnviarArquivar.Tooltip" />
+                    </Supertip>
+                    <Icon>
+                      <bt:Image size="16" resid="Icon.16" />
+                      <bt:Image size="32" resid="Icon.32" />
+                      <bt:Image size="80" resid="Icon.80" />
+                    </Icon>
+                    <Action xsi:type="ExecuteFunction">
+                      <FunctionName>arquivarEEnviar</FunctionName>
+                    </Action>
+                  </Control>
+                </Group>
+              </OfficeTab>
+            </ExtensionPoint>
+            <ExtensionPoint xsi:type="LaunchEvent">
+              <LaunchEvents>
+                <LaunchEvent Type="OnMessageSend" FunctionName="onMessageSendHandler" SendMode="PromptUser" />
+              </LaunchEvents>
+              <SourceLocation resid="WebViewRuntime.Url" />
+            </ExtensionPoint>
           </DesktopFormFactor>
         </Host>
       </Hosts>
@@ -77,14 +125,18 @@
         <bt:Urls>
           <bt:Url id="Taskpane.Url" DefaultValue="https://ghostemane.github.io/quickfile-pci/src/app.html" />
           <bt:Url id="Commands.Url" DefaultValue="https://ghostemane.github.io/quickfile-pci/src/commands.html" />
+          <bt:Url id="WebViewRuntime.Url" DefaultValue="https://ghostemane.github.io/quickfile-pci/src/commands.html" />
+          <bt:Url id="JSRuntime.Url" DefaultValue="https://ghostemane.github.io/quickfile-pci/src/commands.js" />
         </bt:Urls>
         <bt:ShortStrings>
           <bt:String id="GroupLabel" DefaultValue="Arquivar PCI" />
           <bt:String id="TaskpaneButton.Label" DefaultValue="Arquivar PCI" />
           <bt:String id="TaskpaneButton.Title" DefaultValue="Arquivar PCI" />
+          <bt:String id="EnviarArquivar.Label" DefaultValue="Enviar e arquivar" />
         </bt:ShortStrings>
         <bt:LongStrings>
           <bt:String id="TaskpaneButton.Tooltip" DefaultValue="Abrir o painel para arquivar este email numa pasta." />
+          <bt:String id="EnviarArquivar.Tooltip" DefaultValue="Guarda uma copia na pasta e envia o email." />
         </bt:LongStrings>
       </Resources>
     </VersionOverrides>
