@@ -16,6 +16,7 @@ let expandido = new Set();
 let emailAtual = { itemId: null, subject: "", remetente: "", remetenteNome: "" };
 let selecao = [];           // [{itemId, subject}] quando ha varios emails selecionados (>1)
 let selecaoSig = "";        // assinatura da selecao multipla (evita recalcular a cada polling)
+let modo = "read";          // "compose" quando o painel abre ao enviar (menu-ao-enviar)
 let uso = JSON.parse(localStorage.getItem(LS_USO) || "{}");
 
 const $ = (id) => document.getElementById(id);
@@ -27,16 +28,25 @@ Office.onReady((info) => {
   $("busca").addEventListener("input", renderArvore);
   $("busca").addEventListener("focus", () => carregarArvore().catch(() => {}));
   $("btnLogin").addEventListener("click", () => bootstrap(true));
-  try { Office.context.mailbox.addHandlerAsync(Office.EventType.ItemChanged, detetarSelecao); } catch (e) {}
-  try { Office.context.mailbox.addHandlerAsync(Office.EventType.SelectedItemsChanged, detetarSelecao); } catch (e) {}
-  setInterval(detetarSelecao, 400);
-  setInterval(() => carregarArvore().catch(() => {}), 25000);
-  document.addEventListener("visibilitychange", () => { if (!document.hidden) { carregarArvore().catch(() => {}); detetarSelecao(); } });
 
-  detetarSelecao();
+  // Modo compose = painel aberto ao enviar (o item tem saveAsync). Caso contrario, leitura.
+  try { if (Office.context.mailbox.item && typeof Office.context.mailbox.item.saveAsync === "function") modo = "compose"; } catch (e) {}
+
   const cache = JSON.parse(localStorage.getItem(LS_PASTAS) || "null");
   if (cache && cache.length) { indexar(cache); arvore = cache; mostrarUI(); renderArvore(); }
-  bootstrap(false);
+
+  if (modo === "compose") {
+    renderComposeCard();
+    bootstrap(false).then(iniciarCompose).catch(() => {});
+  } else {
+    try { Office.context.mailbox.addHandlerAsync(Office.EventType.ItemChanged, detetarSelecao); } catch (e) {}
+    try { Office.context.mailbox.addHandlerAsync(Office.EventType.SelectedItemsChanged, detetarSelecao); } catch (e) {}
+    setInterval(detetarSelecao, 400);
+    setInterval(() => carregarArvore().catch(() => {}), 25000);
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) { carregarArvore().catch(() => {}); detetarSelecao(); } });
+    detetarSelecao();
+    bootstrap(false);
+  }
 });
 
 /* ---------- email selecionado ---------- */
@@ -118,6 +128,47 @@ function renderEmail() {
     const d = document.createElement("div"); d.className = "de"; d.textContent = emailAtual.remetenteNome ? ("de " + emailAtual.remetenteNome) : "";
     el.appendChild(a); el.appendChild(d);
   } else { el.className = "card vazio"; el.textContent = "Seleciona um email na lista."; }
+}
+
+/* ---------- modo compose (menu-ao-enviar) ---------- */
+function renderComposeCard() {
+  const el = $("email"); el.className = "card"; el.innerHTML = "";
+  const a = document.createElement("div"); a.className = "assunto"; a.textContent = "📤 Arquivar uma cópia ao enviar";
+  const d = document.createElement("div"); d.className = "de"; d.textContent = "Escolhe a pasta (ou pesquisa). Ao clicar, guardo a cópia e envio o email.";
+  el.appendChild(a); el.appendChild(d);
+}
+function composeTo() {
+  return new Promise((res) => {
+    try { Office.context.mailbox.item.to.getAsync((r) => {
+      if (r.status === Office.AsyncResultStatus.Succeeded && r.value && r.value.length) res((r.value[0].emailAddress || "").toLowerCase());
+      else res("");
+    }); } catch (e) { res(""); }
+  });
+}
+async function iniciarCompose() {
+  const to = await composeTo();
+  if (!to) return;
+  emailAtual.remetente = to;
+  const local = melhorDoUso(to);
+  if (local && pastasById[local]) mostrarSugerida(local);
+  else descobrirSugestao(to);
+}
+async function arquivarAoEnviar(folderId, folderName) {
+  const item = Office.context.mailbox.item;
+  status('A guardar cópia em "' + folderName + '" e a enviar…');
+  try {
+    const id = await new Promise((res) => { try { item.saveAsync((r) => res(r.status === Office.AsyncResultStatus.Succeeded ? r.value : null)); } catch (e) { res(null); } });
+    if (id) {
+      const restId = Office.context.mailbox.convertToRestId(id, Office.MailboxEnums.RestVersion.v2_0);
+      const r = await graphFetch("https://graph.microsoft.com/v1.0/me/messages/" + restId + "/copy", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ destinationId: folderId }) });
+      if (!r.ok) { status("⚠️ Não deu para guardar a cópia (" + r.status + "). Fecha e envia na mesma.", "err"); return; }
+    }
+    aprender(emailAtual.remetente, folderId);
+    await new Promise((res) => { try { item.sessionData.setAsync("qf_done", "1", () => res()); } catch (e) { res(); } });
+    status('✅ Cópia guardada em "' + folderName + '". A enviar…', "ok");
+    try { item.sendAsync(() => {}); } catch (e) {}
+  } catch (e) { status("⚠️ Erro: " + ((e && e.message) || e), "err"); }
 }
 
 /* ---------- auth ---------- */
@@ -323,6 +374,7 @@ async function descobrirSugestaoMulti(rem, sig) {
 
 /* ---------- arquivar ---------- */
 async function arquivar(folderId, folderName) {
+  if (modo === "compose") return arquivarAoEnviar(folderId, folderName);
   if (selecao.length > 1) return arquivarVarios(folderId, folderName);
   if (!emailAtual.itemId) { status("Seleciona primeiro um email.", "err"); return; }
   const rem = emailAtual.remetente, alvo = emailAtual.itemId;
@@ -382,7 +434,8 @@ async function criarSubpasta(parent, nome) {
     pastasById[nova.id] = nova; expandido.add(parent.id);
     localStorage.setItem(LS_PASTAS, JSON.stringify(arvore));
     renderArvore();
-    if (selecao.length > 1) await arquivarVarios(nova.id, nova.displayName);
+    if (modo === "compose") await arquivarAoEnviar(nova.id, nova.displayName);
+    else if (selecao.length > 1) await arquivarVarios(nova.id, nova.displayName);
     else if (emailAtual.itemId) await arquivar(nova.id, nova.displayName);
     else status('✅ Subpasta "' + nova.displayName + '" criada.', "ok");
   } catch (e) { status("Erro ao criar: " + ((e && e.message) || e), "err"); }
@@ -399,7 +452,8 @@ async function criarRaiz(nome) {
     arvore.push(nova); arvore.sort((a, b) => (a.displayName || "").localeCompare(b.displayName || "", "pt"));
     pastasById[nova.id] = nova; localStorage.setItem(LS_PASTAS, JSON.stringify(arvore));
     $("busca").value = ""; renderArvore();
-    if (selecao.length > 1) await arquivarVarios(nova.id, nova.displayName);
+    if (modo === "compose") await arquivarAoEnviar(nova.id, nova.displayName);
+    else if (selecao.length > 1) await arquivarVarios(nova.id, nova.displayName);
     else if (emailAtual.itemId) await arquivar(nova.id, nova.displayName);
     else status('✅ Pasta "' + nova.displayName + '" criada.', "ok");
   } catch (e) { status("Erro ao criar: " + ((e && e.message) || e), "err"); }
